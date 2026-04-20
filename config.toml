@@ -1,3 +1,4 @@
+Set-Content .streamlit\config.toml @"
 [theme]
 base = "light"
 primaryColor = "#1a56b0"
@@ -5,3 +6,4 @@ backgroundColor = "#ffffff"
 secondaryBackgroundColor = "#f0f4fa"
 textColor = "#1a2a4a"
 font = "sans serif"
+"@
