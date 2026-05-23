@@ -328,22 +328,78 @@ def do_logout():
 
 def cargar_historial_usuario(user_id: str):
     """
-    ════════════════════════════════════════════════════════════════
-    PUNTO DE INTEGRACIÓN — Historial desde Supabase
-    ════════════════════════════════════════════════════════════════
-    Reemplaza el bloque de abajo con tu consulta real, por ejemplo:
-
-        response = supabase.table("calculos_hidraulicos") \
-            .select("*") \
-            .eq("user_id", user_id) \
-            .order("created_at", desc=True) \
-            .execute()
-        if response.data:
-            st.session_state["lista_resultados"] = response.data
-    ════════════════════════════════════════════════════════════════
+    Lee todos los registros del usuario desde mis_datos en Supabase.
+    Guarda la lista completa de filas en session_state["historial_supabase"]
+    y reconstruye lista_resultados con los datos_procesados de cada fila.
     """
-    # TODO: implementa aquí la carga de historial desde Supabase
-    pass
+    try:
+        response = (
+            supabase.table("mis_datos")
+            .select("*")
+            .order("created_at", desc=True)
+            .execute()
+        )
+        filas = response.data or []
+        st.session_state["historial_supabase"] = filas
+        # Reconstruir lista_resultados desde datos_procesados
+        reconstruidos = []
+        for fila in filas:
+            dp = fila.get("datos_procesados")
+            if isinstance(dp, dict) and "nombre_tubo" in dp:
+                reconstruidos.append(dp)
+        if reconstruidos:
+            st.session_state["lista_resultados"] = reconstruidos
+    except Exception as e:
+        st.session_state["historial_supabase"] = []
+
+
+# ── ▶ AQUÍ SE MAPEAN TUS VARIABLES NUMÉRICAS ◀ ───────────────────────────────
+# Esta función empaqueta TODOS los parámetros de un cálculo y los envía
+# a la columna `datos_procesados` de la tabla `mis_datos` en Supabase.
+# La columna `user_id` se llena automáticamente con auth.uid() en Supabase.
+#
+# Si necesitas guardar campos extra (p.ej. "replica1", "cfd"…) agrégalos
+# al diccionario `payload` siguiendo el mismo patrón.
+# ─────────────────────────────────────────────────────────────────────────────
+def guardar_en_supabase(resultado: dict) -> tuple[bool, str]:
+    """
+    Inserta un resultado hidráulico en mis_datos.
+    `resultado` es el mismo dict que se agrega a lista_resultados.
+    Devuelve (True, "") si OK, (False, mensaje_error) si falla.
+    """
+    # ══ MAPEO DE VARIABLES — edita aquí si cambias los nombres ══
+    payload = {
+        "nombre_tubo": resultado.get("nombre_tubo"),   # str  — nombre de la tubería
+        "material":    resultado.get("material"),       # str  — PVC / FG / HDPE
+        "diam_nom":    resultado.get("diam_nom"),       # str  — '1/2"' / '3/4"' / '1"'
+        "caudal_ls":   resultado.get("caudal_ls"),      # float — caudal en L/s
+        "diametro_m":  resultado.get("diametro_m"),     # float — diámetro interior en m
+        "area_m2":     resultado.get("area_m2"),        # float — área transversal en m²
+        "longitud":    resultado.get("longitud"),       # float — longitud del tramo en m
+        "temp":        resultado.get("temp"),            # int   — temperatura en °C
+        "visc_cin":    resultado.get("visc_cin"),        # float — viscosidad cinemática m²/s
+        "rugosidad":   resultado.get("rugosidad"),       # float — rugosidad absoluta ε en m
+        "Velocidad":   resultado.get("Velocidad"),       # float — velocidad media en m/s
+        "Re":          resultado.get("Re"),              # float — número de Reynolds
+        "rel_eD":      resultado.get("rel_eD"),          # float — relación ε/D
+        "f":           resultado.get("f"),               # float — factor de fricción Swamee-Jain
+        "C_H":         resultado.get("C_H"),             # float — coeficiente Hazen-Williams
+        "K_HW":        resultado.get("K_HW"),            # float — coeficiente K Hazen-Williams
+        "Hf_HW":       resultado.get("Hf_HW"),           # float — pérdida de carga H-W en m
+        "K_DW":        resultado.get("K_DW"),            # float — coeficiente K Darcy-Weisbach
+        "Hf_DW":       resultado.get("Hf_DW"),           # float — pérdida de carga D-W en m
+    }
+    # ════════════════════════════════════════════════════════════
+    try:
+        supabase.table("mis_datos").insert({"datos_procesados": payload}).execute()
+        # Refrescar el historial en sesión
+        st.session_state.setdefault("historial_supabase", []).insert(0, {
+            "datos_procesados": payload,
+            "created_at": "ahora",
+        })
+        return True, ""
+    except Exception as e:
+        return False, str(e)
 
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1039,6 +1095,84 @@ def render_main_app():
     # ━━ TAB 0 — DATOS INICIALES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with tabs[0]:
         st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
+
+        # ── Panel de historial Supabase ───────────────────────────────────────
+        historial = st.session_state.get("historial_supabase", [])
+        if historial:
+            st.markdown('<div class="dh-card">', unsafe_allow_html=True)
+            st.markdown('<div class="dh-card-title">📂 &nbsp;Historial de cálculos guardados</div>',
+                        unsafe_allow_html=True)
+
+            # Construir etiquetas legibles para el selectbox
+            opciones_labels = []
+            for i, fila in enumerate(historial):
+                dp = fila.get("datos_procesados", {})
+                fecha = fila.get("created_at", "")[:16].replace("T", " ")
+                label = (
+                    f"[{fecha}]  {dp.get('nombre_tubo','—')}  ·  "
+                    f"Q={dp.get('caudal_ls','?')} L/s  ·  "
+                    f"{dp.get('material','?')} {dp.get('diam_nom','?')}"
+                )
+                opciones_labels.append(label)
+
+            sel_label = st.selectbox(
+                "Selecciona un cálculo anterior para recuperarlo:",
+                options=["— No recuperar, empezar desde cero —"] + opciones_labels,
+                key="sb_historial",
+            )
+
+            if sel_label != "— No recuperar, empezar desde cero —":
+                idx_sel = opciones_labels.index(sel_label)
+                dp_sel  = historial[idx_sel].get("datos_procesados", {})
+
+                col_prev1, col_prev2, col_prev3, col_prev4 = st.columns(4)
+                with col_prev1:
+                    st.markdown(f"""<div class="dh-metric">
+                        <div class="dh-metric-label">Tubería</div>
+                        <div class="dh-metric-value" style="font-size:0.95rem">{dp_sel.get('nombre_tubo','—')}</div>
+                        <div class="dh-metric-unit">{dp_sel.get('material','—')} · {dp_sel.get('diam_nom','—')}</div>
+                    </div>""", unsafe_allow_html=True)
+                with col_prev2:
+                    st.markdown(f"""<div class="dh-metric">
+                        <div class="dh-metric-label">Caudal · Longitud</div>
+                        <div class="dh-metric-value">{dp_sel.get('caudal_ls','—')}</div>
+                        <div class="dh-metric-unit">L/s · L={dp_sel.get('longitud','—')} m</div>
+                    </div>""", unsafe_allow_html=True)
+                with col_prev3:
+                    st.markdown(f"""<div class="dh-metric">
+                        <div class="dh-metric-label">Hf Hazen-Williams</div>
+                        <div class="dh-metric-value">{float(dp_sel.get('Hf_HW',0)):.5f}</div>
+                        <div class="dh-metric-unit">metros</div>
+                    </div>""", unsafe_allow_html=True)
+                with col_prev4:
+                    st.markdown(f"""<div class="dh-metric">
+                        <div class="dh-metric-label">Hf Darcy-Weisbach</div>
+                        <div class="dh-metric-value">{float(dp_sel.get('Hf_DW',0)):.5f}</div>
+                        <div class="dh-metric-unit">metros</div>
+                    </div>""", unsafe_allow_html=True)
+
+                st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+                if st.button("⏩  Cargar este cálculo y continuar en RESULTADOS",
+                             type="primary", key="btn_cargar_historial"):
+                    # Restaurar todas las variables en session_state
+                    campos = [
+                        "nombre_tubo","material","diam_nom","caudal_ls",
+                        "diametro_m","area_m2","longitud","temp","visc_cin",
+                        "rugosidad","Velocidad","Re","rel_eD","f",
+                        "C_H","K_HW","Hf_HW","K_DW","Hf_DW",
+                    ]
+                    for campo in campos:
+                        if campo in dp_sel:
+                            # Normalizar nombre: diametro_m → diametro, area_m2 → area
+                            key_ss = {"diametro_m": "diametro", "area_m2": "area"}.get(campo, campo)
+                            st.session_state[key_ss] = dp_sel[campo]
+                    st.session_state["go_to_tab"] = 1
+                    st.toast("✅ Cálculo recuperado — navega a RESULTADOS.", icon="📂")
+                    st.rerun()
+
+            st.markdown('</div>', unsafe_allow_html=True)
+            st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
+
         col_img, col_ctrl = st.columns([1, 2], gap="large")
 
         with col_ctrl:
@@ -1258,15 +1392,29 @@ def render_main_app():
             ba1, ba2, ba3 = st.columns(3, gap="medium")
             with ba1:
                 if st.button("💾  Guardar en Hoja de Resumen", type="primary", use_container_width=True):
-                    st.session_state.lista_resultados.append({
+                    nuevo_resultado = {
                         "nombre_tubo": st.session_state.nombre_tubo, "material": mat,
                         "diam_nom": diam_nom, "caudal_ls": Q_Ls, "diametro_m": D_m,
                         "area_m2": A, "longitud": L, "temp": st.session_state.get("temp", 10),
                         "visc_cin": v_cin, "rugosidad": eps, "Velocidad": V, "Re": Re,
                         "rel_eD": eD, "f": f, "C_H": C_H, "K_HW": K_HW, "Hf_HW": Hf_HW,
                         "K_DW": K_DW, "Hf_DW": Hf_DW,
-                    })
-                    st.success(f"✅ Reporte {len(st.session_state.lista_resultados)} guardado.")
+                    }
+                    # 1. Guardar localmente en la sesión
+                    st.session_state.lista_resultados.append(nuevo_resultado)
+                    # 2. Persistir en Supabase
+                    with st.spinner("Guardando en la nube…"):
+                        ok_sb, err_sb = guardar_en_supabase(nuevo_resultado)
+                    if ok_sb:
+                        st.success(
+                            f"✅ Reporte {len(st.session_state.lista_resultados)} guardado "
+                            f"localmente y en Supabase ☁️"
+                        )
+                    else:
+                        st.warning(
+                            f"⚠ Guardado localmente, pero falló Supabase: {err_sb}\n"
+                            "Los datos están en esta sesión pero no persistirán al cerrar."
+                        )
             with ba2:
                 if st.button("➕  Añadir otra iteración", use_container_width=True):
                     for key in ['caudal_ls','diametro','longitud','temp',
