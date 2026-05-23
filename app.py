@@ -1,4 +1,46 @@
 import streamlit as st
+from supabase import create_client
+
+# 1. Conexión segura (Streamlit busca automáticamente lo que guardaste en el Paso 1)
+url = st.secrets["SUPABASE_URL"]
+key = st.secrets["SUPABASE_KEY"]
+supabase = create_client(url, key)
+
+st.title("Mi Aplicación con Login")
+
+# 2. Menú para registrarse o iniciar sesión
+menu = ["Iniciar Sesión", "Registrarse"]
+opcion = st.sidebar.selectbox("Menú de Acceso", menu)
+
+if opcion == "Registrarse":
+    st.subheader("Crea una cuenta nueva")
+    correo = st.text_input("Tu Correo")
+    clave = st.text_input("Tu Contraseña", type="password")
+    
+    if st.button("Crear cuenta"):
+        try:
+            user = supabase.auth.sign_up({"email": correo, "password": clave})
+            st.success("¡Cuenta creada! Te llegará un correo de confirmación.")
+        except Exception as e:
+            st.error(f"Error: {e}")
+
+elif opcion == "Iniciar Sesión":
+    st.subheader("Ingresa a tu cuenta")
+    correo = st.text_input("Correo")
+    clave = st.text_input("Contraseña", type="password")
+    
+    if st.button("Entrar"):
+        try:
+            session = supabase.auth.sign_in_with_password({"email": correo, "password": clave})
+            st.success("¡Has iniciado sesión con éxito!")
+            st.session_state["user_id"] = session.user.id
+            
+            # --- starttttttttttt ---
+            st.write("¡Aquí va tu app original para procesar datos!")
+            
+        except Exception as e:
+            st.error("Correo o contraseña incorrectos.")
+import streamlit as st
 import pandas as pd
 import numpy as np
 import os, io, re
