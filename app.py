@@ -12,19 +12,20 @@ Estructura:
   7. App principal (hidráulica completa)
   8. Punto de entrada main()
 """
- 
+
 import time
 import os
 import io
 import re
 import streamlit as st
+import streamlit.components.v1 as _components
 import pandas as pd
 import numpy as np
 from supabase import create_client
 from openpyxl import Workbook
 from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
- 
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 2. CONFIGURACIÓN DE PÁGINA
 #    DEBE ser la primera llamada a Streamlit — antes de cualquier st.*
@@ -34,7 +35,7 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
- 
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 1. CONEXIÓN A SUPABASE
 #    Crea .streamlit/secrets.toml con:
@@ -46,16 +47,16 @@ def init_supabase():
     url = st.secrets["SUPABASE_URL"]
     key = st.secrets["SUPABASE_KEY"]
     return create_client(url, key)
- 
+
 supabase = init_supabase()
- 
-st.markdown("""
+
+_CSS = """
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Exo+2:ital,wght@0,300;0,400;0,500;1,300&family=Share+Tech+Mono&display=swap" rel="stylesheet">
 <style>
 /* ── Reset ── */
 #MainMenu, header[data-testid="stHeader"], [data-testid="stToolbar"],
 .stDeployButton, footer { visibility: hidden !important; display: none !important; }
- 
+
 :root {
   --c-navy:   #12294A;
   --c-blue:   #1A56B0;
@@ -67,7 +68,7 @@ st.markdown("""
   --c-muted:  #5A7AAA;
   --c-white:  #FFFFFF;
 }
- 
+
 /* ════ AUTH SCREEN ════ */
 .auth-logo-bar {
   text-align: center; margin-bottom: 2rem;
@@ -104,7 +105,7 @@ st.markdown("""
   font-family: 'Share Tech Mono', monospace; font-size: 0.62rem;
   color: var(--c-muted); letter-spacing: 0.15em;
 }
- 
+
 /* ════ TABS ════ */
 div[data-testid="stTabs"] > div > div[role="tablist"] {
   background: #f0f4fa !important; border-bottom: 2px solid #c5d5ea !important;
@@ -133,7 +134,7 @@ div[data-testid="stTabs"] button[role="tab"] div {
   font-weight: inherit !important; letter-spacing: inherit !important;
   text-transform: inherit !important;
 }
- 
+
 /* ════ BUTTONS ════ */
 [data-testid="stButton"] > button {
   background: transparent !important; border: 1px solid #1a56b0 !important;
@@ -159,7 +160,7 @@ div[data-testid="stTabs"] button[role="tab"] div {
 [data-testid="stDownloadButton"] > button:hover {
   border-color: #1a56b0 !important; color: #1a56b0 !important;
 }
- 
+
 /* ════ WELCOME BANNER ════ */
 .welcome-banner {
   background: linear-gradient(135deg, #12294A 0%, #2563A8 60%, #12294A 100%);
@@ -178,7 +179,7 @@ div[data-testid="stTabs"] button[role="tab"] div {
   font-family: 'Share Tech Mono', monospace; font-size: 0.62rem;
   color: #7AAAD0; text-align: right; line-height: 1.8;
 }
- 
+
 /* ════ APP CARDS Y COMPONENTES ════ */
 .dh-card {
   background: #ffffff; border: 1px solid #c5d5ea;
@@ -234,7 +235,7 @@ label, [data-testid="stWidgetLabel"] p {
 ::-webkit-scrollbar-track { background: #f0f4fa; }
 ::-webkit-scrollbar-thumb { background: #c5d5ea; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #1a56b0; }
- 
+
 /* ════ KEYFRAMES ════ */
 @keyframes fadeSlideDown {
   from { opacity: 0; transform: translateY(-18px); }
@@ -245,9 +246,22 @@ label, [data-testid="stWidgetLabel"] p {
   to   { opacity: 1; transform: translateY(0); }
 }
 </style>
-""", unsafe_allow_html=True)
- 
- 
+<script>
+  // Inyectar estilos en el documento padre desde el iframe de components
+  var styleEl = document.createElement('style');
+  var linkEl  = document.createElement('link');
+  linkEl.rel  = 'stylesheet';
+  linkEl.href = 'https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Exo+2:ital,wght@0,300;0,400;0,500;1,300&family=Share+Tech+Mono&display=swap';
+  document.head.appendChild(linkEl);
+  styleEl.innerHTML = document.querySelector('style').innerHTML;
+  window.parent.document.head.appendChild(linkEl.cloneNode());
+  window.parent.document.head.appendChild(styleEl);
+</script>
+"""
+
+_components.html(_CSS, height=0, scrolling=False)
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 3. SESSION STATE
 # ══════════════════════════════════════════════════════════════════════════════
@@ -269,10 +283,10 @@ def init_session():
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
- 
+
 init_session()
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 4. FUNCIONES DE AUTENTICACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
@@ -286,8 +300,8 @@ def do_login(email: str, password: str) -> tuple:
         return True, session.user.email
     except Exception:
         return False, "Correo o contraseña incorrectos. Verifica tus datos e intenta de nuevo."
- 
- 
+
+
 def do_register(email: str, password: str) -> tuple:
     if len(password) < 6:
         return False, "La contraseña debe tener al menos 6 caracteres."
@@ -299,8 +313,8 @@ def do_register(email: str, password: str) -> tuple:
         if "already registered" in err.lower():
             return False, "Este correo ya está registrado. Inicia sesión en su lugar."
         return False, "No se pudo crear la cuenta. Verifica que el correo sea válido."
- 
- 
+
+
 def do_logout():
     try:
         supabase.auth.sign_out()
@@ -310,15 +324,15 @@ def do_logout():
         del st.session_state[key]
     init_session()
     st.rerun()
- 
- 
+
+
 def cargar_historial_usuario(user_id: str):
     """
     ════════════════════════════════════════════════════════════════
     PUNTO DE INTEGRACIÓN — Historial desde Supabase
     ════════════════════════════════════════════════════════════════
     Reemplaza el bloque de abajo con tu consulta real, por ejemplo:
- 
+
         response = supabase.table("calculos_hidraulicos") \
             .select("*") \
             .eq("user_id", user_id) \
@@ -330,8 +344,8 @@ def cargar_historial_usuario(user_id: str):
     """
     # TODO: implementa aquí la carga de historial desde Supabase
     pass
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 5. PANTALLA DE AUTENTICACIÓN
 # ══════════════════════════════════════════════════════════════════════════════
@@ -345,14 +359,14 @@ def render_auth_screen():
           <div class="auth-subtitle">Análisis de Pérdidas de Carga en Tuberías a Presión</div>
         </div>
         """, unsafe_allow_html=True)
- 
+
         card_container = st.empty()
- 
+
         with card_container.container():
             st.markdown('<div class="auth-card">', unsafe_allow_html=True)
- 
+
             tab_login, tab_registro = st.tabs(["  Iniciar Sesión", "  Registrarse  "])
- 
+
             # ── LOGIN ────────────────────────────────────────────────────────
             with tab_login:
                 st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
@@ -361,7 +375,7 @@ def render_auth_screen():
                 password_in = st.text_input("Contraseña",
                                             type="password", placeholder="••••••••", key="login_pass")
                 st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
- 
+
                 if st.button("Ingresar al sistema", key="btn_login"):
                     if not email_in or not password_in:
                         st.error("Completa todos los campos antes de continuar.")
@@ -380,7 +394,7 @@ def render_auth_screen():
                             st.rerun()
                         else:
                             st.error(msg)
- 
+
             # ── REGISTRO ─────────────────────────────────────────────────────
             with tab_registro:
                 st.markdown('<div style="height:6px"></div>', unsafe_allow_html=True)
@@ -391,7 +405,7 @@ def render_auth_screen():
                 pass_reg2 = st.text_input("Confirmar contraseña",
                                           type="password", placeholder="Repite tu contraseña", key="reg_pass2")
                 st.markdown('<div style="height:4px"></div>', unsafe_allow_html=True)
- 
+
                 if st.button("Crear cuenta", key="btn_register"):
                     if not email_reg or not pass_reg or not pass_reg2:
                         st.error("Completa todos los campos.")
@@ -405,22 +419,22 @@ def render_auth_screen():
                             st.success(msg)
                         else:
                             st.error(msg)
- 
+
             st.markdown('</div>', unsafe_allow_html=True)
             st.markdown("""
             <div class="auth-footer">
               Acceso seguro · Powered by Supabase Auth
             </div>
             """, unsafe_allow_html=True)
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 6. BANNER DE BIENVENIDA
 # ══════════════════════════════════════════════════════════════════════════════
 def render_welcome_banner():
     email          = st.session_state.get("user_email", "Usuario")
     nombre_display = email.split("@")[0].capitalize()
- 
+
     col_banner, col_logout = st.columns([5, 1])
     with col_banner:
         st.markdown(f"""
@@ -440,12 +454,12 @@ def render_welcome_banner():
         st.markdown('<div style="height:22px"></div>', unsafe_allow_html=True)
         if st.button("⏏  Cerrar sesión", key="btn_logout"):
             do_logout()
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 7. APP HIDRÁULICA PRINCIPAL
 # ══════════════════════════════════════════════════════════════════════════════
- 
+
 # ── Carga de datos ───────────────────────────────────────────────────────────
 @st.cache_data
 def cargar_datos():
@@ -458,12 +472,12 @@ def cargar_datos():
     df_tubo['Diametro_m'] = pd.to_numeric(df_tubo['Diametro_m'], errors='coerce')
     df_tubo['Area_m2']    = pd.to_numeric(df_tubo['Area_m2'],    errors='coerce')
     return df_agua, df_rug, df_tubo
- 
- 
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────────
 def safe_sheet_name(name: str, max_len: int = 31) -> str:
     return re.sub(r'[\\/*?:\[\]/]', '-', name)[:max_len]
- 
+
 def detectar_diam_nom(nombre_tubo: str) -> str:
     n = nombre_tubo.upper()
     if '3/4' in n:
@@ -471,7 +485,7 @@ def detectar_diam_nom(nombre_tubo: str) -> str:
     if '1"' in n or n.strip().endswith(' 1'):
         return '1"'
     return '1/2"'
- 
+
 def detectar_material_tubo(nombre_tubo: str, df_rug: pd.DataFrame) -> str:
     n_clean = re.sub(r'[°\s]', '', nombre_tubo.upper())
     for mat in df_rug['Material']:
@@ -485,7 +499,7 @@ def detectar_material_tubo(nombre_tubo: str, df_rug: pd.DataFrame) -> str:
             if 'FG' in re.sub(r'[°\s]', '', mat.upper()):
                 return mat
     return df_rug['Material'].iloc[0]
- 
+
 def calcular(nombre_tubo, material, rugosidad, diametro, area, caudal_ls, longitud, temp, visc_cin):
     Q_m3s = caudal_ls / 1000
     V     = Q_m3s / area
@@ -508,26 +522,26 @@ def calcular(nombre_tubo, material, rugosidad, diametro, area, caudal_ls, longit
         "Velocidad": V, "Re": Re, "rel_eD": eD, "f": f, "C_H": C_H,
         "K_HW": K_HW, "Hf_HW": Hf_HW, "K_DW": K_DW, "Hf_DW": Hf_DW,
     }
- 
+
 def jump_to_tab(tab_index: int):
     js = (f"<script>(function(){{var a=0;function t(){{a++;var tabs=window.parent.document"
           f".querySelectorAll('[data-testid=\"stTabs\"] [role=\"tab\"]');"
           f"if(tabs.length>{tab_index}){{tabs[{tab_index}].click();}}"
           f"else if(a<30){{setTimeout(t,100);}}}}setTimeout(t,80);}})();</script>")
     st.components.v1.html(js, height=0)
- 
- 
+
+
 # ── Excel helpers ─────────────────────────────────────────────────────────────
 def _border(color="8EAADB"):
     s = Side(style='thin', color=color)
     return Border(left=s, right=s, top=s, bottom=s)
- 
+
 def _fill(hex_color):   return PatternFill("solid", fgColor=hex_color)
 def _font(bold=False, color="1F2937", size=9, name="Calibri"):
     return Font(bold=bold, color=color, size=size, name=name)
 def _align(h="center", v="center", wrap=True):
     return Alignment(horizontal=h, vertical=v, wrap_text=wrap)
- 
+
 XL = dict(
     title_bg="12294A", title_fg="FFFFFF",
     head1_bg="1A4A7A", head1_fg="FFFFFF",
@@ -538,7 +552,7 @@ XL = dict(
     row_even="EDF3FA", row_odd="FFFFFF",
     border_c="8EAADB",
 )
- 
+
 def build_detalle_sheet(ws, r, idx_num):
     ws.sheet_view.showGridLines = False
     ws.merge_cells("A1:D1")
@@ -547,20 +561,20 @@ def build_detalle_sheet(ws, r, idx_num):
     c.font = _font(bold=True, size=13, color=XL["title_fg"])
     c.fill = _fill(XL["title_bg"]); c.alignment = _align(); c.border = _border(XL["border_c"])
     ws.row_dimensions[1].height = 28
- 
+
     ws.merge_cells("A2:D2")
     ws["A2"].value = f"Reporte Detallado  |  Tubería: {r['nombre_tubo']}  ·  Material: {r['material']}  ·  Ø nominal: {r['diam_nom']}"
     ws["A2"].font = _font(size=9, color="3A5A8A"); ws["A2"].fill = _fill("D6E4F5")
     ws["A2"].alignment = _align(); ws["A2"].border = _border(XL["border_c"])
     ws.row_dimensions[2].height = 16
- 
+
     for i, (h, w) in enumerate(zip(["Parámetro","Valor","Unidad","Observación"], [32,18,14,30]), 1):
         ws.column_dimensions[get_column_letter(i)].width = w
         cell = ws.cell(row=3, column=i, value=h)
         cell.font = _font(bold=True, color=XL["head2_fg"]); cell.fill = _fill(XL["head2_bg"])
         cell.alignment = _align(); cell.border = _border(XL["border_c"])
     ws.row_dimensions[3].height = 18
- 
+
     rows_data = [
         ("Caudal",                f"{r['caudal_ls']} L/s = {r['caudal_ls']/1000:.4f} m³/s",   "L/s / m³/s", ""),
         ("Diámetro interno",      f"{r['diametro_m']*1000:.1f} mm = {r['diametro_m']:.4f} m",  "mm / m",     ""),
@@ -587,7 +601,7 @@ def build_detalle_sheet(ws, r, idx_num):
             cell.font = _font(color="1F2937", bold=(ci == 1))
             cell.alignment = _align(h="left" if ci in (1, 4) else "center")
         ws.row_dimensions[ri].height = 16
- 
+
     cr = len(rows_data) + 5
     ws.merge_cells(f"A{cr}:D{cr}")
     c = ws.cell(row=cr, column=1, value="COMPARACIÓN DE MÉTODOS")
@@ -612,8 +626,8 @@ def build_detalle_sheet(ws, r, idx_num):
             cell.font = _font(color="1F2937", bold=(ci == 1))
             cell.alignment = _align(h="left" if ci == 1 else "center")
         ws.row_dimensions[di].height = 16
- 
- 
+
+
 def build_resumen_sheet(ws, lista, datos_editados):
     ws.sheet_view.showGridLines = False
     caudales  = [0.5, 0.9, 1.5]
@@ -624,14 +638,14 @@ def build_resumen_sheet(ws, lista, datos_editados):
     mat_font  = {"PVC": XL["pvc_fg"], "FG": XL["fg_fg"], "HDPE": XL["hdpe_fg"]}
     total_cols = 1 + 27
     last_col   = get_column_letter(total_cols)
- 
+
     ws.merge_cells(f"A1:{last_col}1")
     c = ws["A1"]
     c.value = "ANÁLISIS DE PÉRDIDA DE CARGA — DISEÑO HIDRÁULICO · CUADRO CONSOLIDADO"
     c.font = _font(bold=True, size=13, color=XL["title_fg"])
     c.fill = _fill(XL["title_bg"]); c.alignment = _align(); c.border = _border()
     ws.row_dimensions[1].height = 26
- 
+
     ws.cell(row=2, column=1, value="CAUDAL (L/S)").font = _font(bold=True, color="1F2937")
     ws.cell(row=2, column=1).fill = _fill("D6E4F5")
     ws.cell(row=2, column=1).alignment = _align(); ws.cell(row=2, column=1).border = _border()
@@ -644,7 +658,7 @@ def build_resumen_sheet(ws, lista, datos_editados):
         for cc in range(col, col+9): ws.cell(row=2, column=cc).border = _border()
         col += 9
     ws.row_dimensions[2].height = 20
- 
+
     ws.cell(row=3, column=1, value="MATERIAL").font = _font(bold=True, color="1F2937")
     ws.cell(row=3, column=1).fill = _fill("D6E4F5")
     ws.cell(row=3, column=1).alignment = _align(); ws.cell(row=3, column=1).border = _border()
@@ -658,7 +672,7 @@ def build_resumen_sheet(ws, lista, datos_editados):
             for cc in range(col, col+3): ws.cell(row=3, column=cc).border = _border()
             col += 3
     ws.row_dimensions[3].height = 18
- 
+
     ws.cell(row=4, column=1, value="DIÁMETRO NOMINAL").font = _font(bold=True, color="1F2937")
     ws.cell(row=4, column=1).fill = _fill("D6E4F5")
     ws.cell(row=4, column=1).alignment = _align(); ws.cell(row=4, column=1).border = _border()
@@ -671,7 +685,7 @@ def build_resumen_sheet(ws, lista, datos_editados):
                 c.fill = _fill(mat_fill[mat]); c.alignment = _align(); c.border = _border()
                 col += 1
     ws.row_dimensions[4].height = 16
- 
+
     for ri, (label, key) in enumerate([
         ("VELOCIDAD POR CONTINUIDAD (m/s)", "Velocidad"),
         ("PÉRDIDA DE CARGA H-W (m)",        "Hf_HW"),
@@ -694,7 +708,7 @@ def build_resumen_sheet(ws, lista, datos_editados):
                     c2.font = _font(color="1F2937"); c2.alignment = _align()
                     col += 1
         ws.row_dimensions[ri].height = 16
- 
+
     for ri, (label, fk) in enumerate([
         ("PÉRDIDA DE CARGA OPEN FOAM (CFD)", "cfd"),
         ("PÉRDIDA EN EXPERIMENTACIÓN",       "experimental"),
@@ -710,14 +724,14 @@ def build_resumen_sheet(ws, lista, datos_editados):
             cell.fill = _fill(bg); cell.border = _border()
             cell.font = _font(color="1F2937"); cell.alignment = _align()
         ws.row_dimensions[ri].height = 16
- 
+
     ws.row_dimensions[10].height = 6
     ws.merge_cells(f"A11:{last_col}11")
     c = ws.cell(row=11, column=1, value="Planteamiento del diseño experimental  (solo para caso longitudinal)")
     c.font = _font(bold=True, color="12294A")
     c.fill = _fill("D6E4F5"); c.alignment = _align(); c.border = _border()
     ws.row_dimensions[11].height = 18
- 
+
     for ri2, (lbl, fk) in enumerate([
         ("PRIMERA RÉPLICA", "replica1"),
         ("SEGUNDA RÉPLICA", "replica2"),
@@ -733,12 +747,12 @@ def build_resumen_sheet(ws, lista, datos_editados):
             cell.fill = _fill(XL["row_odd"]); cell.border = _border()
             cell.font = _font(color="1F2937"); cell.alignment = _align()
         ws.row_dimensions[ri2].height = 16
- 
+
     ws.column_dimensions["A"].width = 34
     for col in range(2, total_cols+1):
         ws.column_dimensions[get_column_letter(col)].width = 8
- 
- 
+
+
 def build_excel(lista: list, datos_editados: dict) -> bytes:
     wb = Workbook()
     wb.remove(wb.active)
@@ -751,8 +765,8 @@ def build_excel(lista: list, datos_editados: dict) -> bytes:
     buf = io.BytesIO()
     wb.save(buf)
     return buf.getvalue()
- 
- 
+
+
 def build_pdf(lista: list, datos_editados: dict) -> bytes:
     try:
         from reportlab.lib.pagesizes import A4, landscape
@@ -767,14 +781,14 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
         from reportlab.lib.colors import HexColor
     except ImportError:
         return b""
- 
+
     buf = io.BytesIO()
     C_DARK  = HexColor("#12294A"); C_MED   = HexColor("#1A4A7A")
     C_LIGHT = HexColor("#2563A8"); C_BG    = HexColor("#EDF3FA")
     C_PVC   = HexColor("#D6E4F5"); C_FG    = HexColor("#F5E6D0")
     C_HDPE  = HexColor("#D5EAD8"); C_WHITE = colors.white
     C_GREY  = HexColor("#4A6A8A")
- 
+
     sty_title = ParagraphStyle("t", fontName="Helvetica-Bold", fontSize=15,
                                 textColor=C_DARK, alignment=TA_CENTER, spaceAfter=4)
     sty_sub   = ParagraphStyle("s", fontName="Helvetica", fontSize=8.5,
@@ -783,7 +797,7 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
                                 textColor=C_MED, spaceAfter=5, spaceBefore=12)
     pw, ph = A4
     lw, lh = landscape(A4)
- 
+
     def _hf(canvas, doc, w, h):
         canvas.saveState()
         canvas.setFillColor(C_DARK); canvas.rect(0, h-26, w, 26, fill=1, stroke=0)
@@ -796,7 +810,7 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
         canvas.setFillColor(C_GREY); canvas.setFont("Helvetica", 6.5)
         canvas.drawCentredString(w/2, 13, "Universidad Nacional del Altiplano · Puno 2026")
         canvas.restoreState()
- 
+
     doc = SimpleDocTemplate(buf, pagesize=A4,
                             leftMargin=2*cm, rightMargin=2*cm,
                             topMargin=2*cm, bottomMargin=1.8*cm)
@@ -808,7 +822,7 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
                      frames=[Frame(2*cm, 1.8*cm, lw-4*cm, lh-2*cm-1.8*cm)],
                      onPage=lambda c, d: _hf(c, d, lw, lh), pagesize=landscape(A4)),
     ])
- 
+
     story = [Spacer(1, 1.2*cm)]
     story.append(Paragraph("ANÁLISIS DE PÉRDIDA DE CARGA", sty_title))
     story.append(Paragraph(
@@ -816,12 +830,12 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
     story.append(HRFlowable(width="100%", thickness=1.2, color=C_LIGHT, spaceAfter=5))
     story.append(Paragraph(f"Informe con {len(lista)} reporte(s) de cálculo", sty_sub))
     story.append(Spacer(1, 0.5*cm))
- 
+
     caudales   = [0.5, 0.9, 1.5]
     materiales = ["PVC", "FG", "HDPE"]
     diams_nom  = ['1/2"', '3/4"', '1"']
     mat_col    = {"PVC": C_PVC, "FG": C_FG, "HDPE": C_HDPE}
- 
+
     GS = lambda c: [
         ("BACKGROUND",  (0,0),(-1,0), C_MED), ("TEXTCOLOR", (0,0),(-1,0), C_WHITE),
         ("FONTNAME",    (0,0),(-1,0), "Helvetica-Bold"), ("FONTSIZE",(0,0),(-1,-1),7.5),
@@ -833,7 +847,7 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
         ("ROWHEIGHT",   (0,0),(-1,-1),15), ("LEFTPADDING",(0,0),(-1,-1),7),
         ("BACKGROUND",  (0,1),(-1,-1), c),
     ]
- 
+
     for r in lista:
         story.append(PageBreak())
         story.append(Paragraph("REPORTE DETALLADO DE CÁLCULO HIDRÁULICO", sty_title))
@@ -885,16 +899,16 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
             ("ROWHEIGHT",  (0,0),(-1,-1),17),
         ]))
         story.append(tc)
- 
+
     story.append(NextPageTemplate('Landscape'))
     story.append(PageBreak())
     story.append(Paragraph("CUADRO CONSOLIDADO DE RESULTADOS", sty_title))
     story.append(HRFlowable(width="100%", thickness=1.2, color=C_LIGHT, spaceAfter=8))
- 
+
     idx   = {(r["caudal_ls"], r["material"], r["diam_nom"]): r for r in lista}
     mat_c = {"PVC": C_PVC, "FG": C_FG, "HDPE": C_HDPE}
     mat_t = {"PVC": HexColor("#0D2137"), "FG": HexColor("#5A2D00"), "HDPE": HexColor("#1A3D1F")}
- 
+
     def calc_row(label, key):
         row = [label]
         for q in caudales:
@@ -906,14 +920,14 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
                         val = f"{v:.3f}" if isinstance(v, float) else str(v)
                     row.append(val)
         return row
- 
+
     def edit_row(label, fk):
         row = [label]
         vals = datos_editados.get(fk, [""] * 27)
         for v in vals[:27]:
             row.append(v if v else "")
         return row
- 
+
     all_data = [
         ["CAUDAL (L/S)"] + [str(q) for q in caudales for _ in range(9)],
         ["MATERIAL"]     + [m for _ in caudales for m in materiales for _ in range(3)],
@@ -928,7 +942,7 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
         edit_row("SEGUNDA RÉPLICA", "replica2"),
         edit_row("TERCERA RÉPLICA", "replica3"),
     ]
- 
+
     cw = [4.2*cm] + [0.78*cm] * 27
     t2 = Table(all_data, colWidths=cw, repeatRows=3)
     bs = [
@@ -966,16 +980,16 @@ def build_pdf(lista: list, datos_editados: dict) -> bytes:
     story.append(t2)
     doc.build(story)
     return buf.getvalue()
- 
- 
+
+
 # ── Función principal de la app hidráulica ───────────────────────────────────
 def render_main_app():
     # Cargar datos (solo accesible tras autenticación)
     df_agua, df_rug, df_tubo = cargar_datos()
- 
+
     # Banner de bienvenida + botón de logout
     render_welcome_banner()
- 
+
     # Indicador de historial
     n_reportes = len(st.session_state.get("lista_resultados", []))
     if n_reportes > 0:
@@ -992,9 +1006,9 @@ def render_main_app():
           📋 &nbsp;No hay historial previo. Comienza un nuevo análisis en <b>DATOS INICIALES</b>.
         </div>
         """, unsafe_allow_html=True)
- 
+
     st.markdown('<hr style="border:none;height:1px;background:linear-gradient(90deg,transparent,#2a6fdb,transparent);margin:0 0 18px">', unsafe_allow_html=True)
- 
+
     # Header de la app
     st.markdown("""
     <div style="background:linear-gradient(135deg,#1e3a6e 0%,#2a5aaa 50%,#1a3060 100%);
@@ -1013,20 +1027,20 @@ def render_main_app():
         &nbsp;·&nbsp; Universidad Nacional del Altiplano · Puno 2026</span>
     </div>
     """, unsafe_allow_html=True)
- 
+
     # Saltar tab si se requiere
     if st.session_state.go_to_tab == 1:
         jump_to_tab(1)
         st.session_state.go_to_tab = None
- 
+
     # ══ PESTAÑAS ══════════════════════════════════════════════════════════════
     tabs = st.tabs(["  DATOS INICIALES","  DATOS DE ENTRADA","  RESULTADOS","  HOJA DE RESUMEN"])
- 
+
     # ━━ TAB 0 — DATOS INICIALES ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with tabs[0]:
         st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
         col_img, col_ctrl = st.columns([1, 2], gap="large")
- 
+
         with col_ctrl:
             st.markdown('<div class="dh-card">', unsafe_allow_html=True)
             st.markdown('<div class="dh-card-title">Parámetros de control</div>', unsafe_allow_html=True)
@@ -1050,7 +1064,7 @@ def render_main_app():
                     <div class="dh-metric-value">{st.session_state.visc_cin:.2e}</div>
                     <div class="dh-metric-unit">m²/s</div></div>""", unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
- 
+
         with col_img:
             st.markdown('<div class="dh-card">', unsafe_allow_html=True)
             st.markdown('<div class="dh-card-title">Esquema del sistema</div>', unsafe_allow_html=True)
@@ -1059,18 +1073,18 @@ def render_main_app():
             else:
                 st.info("Coloca 'Imagen2.png' en el directorio del proyecto.")
             st.markdown('</div>', unsafe_allow_html=True)
- 
+
     # ━━ TAB 1 — DATOS DE ENTRADA ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with tabs[1]:
         st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
- 
+
         if st.session_state.get("go_to_tab") == "banner":
             st.success("✅ Resultado guardado. Ingresa nuevos parámetros y presiona CALCULAR.")
             st.session_state.go_to_tab = None
- 
+
         st.markdown('<div class="dh-card">', unsafe_allow_html=True)
         st.markdown('<div class="dh-card-title">Configuración hidráulica</div>', unsafe_allow_html=True)
- 
+
         col_left, col_right = st.columns(2, gap="large")
         with col_left:
             nombre_tubo = st.selectbox("Seleccione tubería:", df_tubo['Nombre'].unique())
@@ -1085,7 +1099,7 @@ def render_main_app():
                 <div class="dh-metric-value" style="font-size:1rem">{material}</div>
                 <div class="dh-metric-unit">{rugosidad:.7f} m</div>
             </div>""", unsafe_allow_html=True)
- 
+
         with col_right:
             caudal_ls = st.radio("Caudal de diseño (L/s):", [0.5, 0.9, 1.5], horizontal=True)
             st.markdown(f"""<div class="dh-metric" style="margin-top:12px">
@@ -1093,10 +1107,10 @@ def render_main_app():
                 <div class="dh-metric-value" style="font-size:1rem">{d_m*1000:.2f} mm</div>
                 <div class="dh-metric-unit">{a_m2:.6f} m²</div>
             </div>""", unsafe_allow_html=True)
- 
+
         st.markdown('</div>', unsafe_allow_html=True)
         st.markdown('<div style="height:8px"></div>', unsafe_allow_html=True)
- 
+
         btn_col1, btn_col2 = st.columns(2, gap="medium")
         with btn_col1:
             if st.button("⚡  CALCULAR RESULTADOS", use_container_width=True, type="primary"):
@@ -1107,7 +1121,7 @@ def render_main_app():
                     "visc_cin": st.session_state.get("visc_cin", 1e-6),
                 })
                 st.success("✅ Cálculos listos — navega a la pestaña RESULTADOS.")
- 
+
         with btn_col2:
             if st.button("🗂  PROCESAR TODAS LAS COMBINACIONES", use_container_width=True):
                 longitud = st.session_state.get("longitud", 1.5)
@@ -1138,11 +1152,11 @@ def render_main_app():
                     st.success(f"✅ {count} combinaciones procesadas. Ve a HOJA DE RESUMEN.")
                 else:
                     st.info("Todas las combinaciones ya estaban procesadas.")
- 
+
     # ━━ TAB 2 — RESULTADOS ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with tabs[2]:
         st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
- 
+
         if 'caudal_ls' not in st.session_state:
             st.markdown("""<div class="dh-card" style="text-align:center;padding:38px">
                 <div style="font-family:'Rajdhani',sans-serif;font-size:1.3rem;color:#5a7aaa;letter-spacing:3px">
@@ -1165,7 +1179,7 @@ def render_main_app():
             K_HW  = (10.67 * L) / ((C_H ** 1.852) * (D_m ** 4.87)); Hf_HW = K_HW * (Q_m3s ** 1.852)
             K_DW  = (0.08263 * f * L) / (D_m ** 5);                  Hf_DW = K_DW * (Q_m3s ** 2)
             diam_nom = detectar_diam_nom(st.session_state.nombre_tubo)
- 
+
             mc_hex = {"PVC":"#1a56b0","FG":"#8A5200","HDPE":"#1A7A40"}.get(mat,"#2563A8")
             st.markdown(f"""<div style="display:flex;align-items:center;gap:14px;margin-bottom:18px">
                 <div style="background:{mc_hex};padding:7px 18px;font-family:'Rajdhani',sans-serif;
@@ -1174,7 +1188,7 @@ def render_main_app():
                 <div style="font-family:'Share Tech Mono',monospace;color:#5a7aaa;font-size:0.72rem">
                 Q={Q_Ls} L/s · L={L:.2f} m · T={st.session_state.get('temp',10)}°C</div>
             </div>""", unsafe_allow_html=True)
- 
+
             mc1, mc2, mc3, mc4 = st.columns(4)
             for cm_, (label, unit, val) in zip([mc1, mc2, mc3, mc4], [
                 ("Velocidad","m/s",f"{V:.4f}"), ("Reynolds","—",f"{Re:,.0f}"),
@@ -1185,10 +1199,10 @@ def render_main_app():
                         <div class="dh-metric-label">{label}</div>
                         <div class="dh-metric-value">{val}</div>
                         <div class="dh-metric-unit">{unit}</div></div>""", unsafe_allow_html=True)
- 
+
             st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
             col_t, col_i = st.columns([3, 2], gap="large")
- 
+
             with col_t:
                 st.markdown('<div class="dh-card">', unsafe_allow_html=True)
                 st.markdown('<div class="dh-card-title">Parámetros detallados</div>', unsafe_allow_html=True)
@@ -1212,7 +1226,7 @@ def render_main_app():
                 html_t += '</tbody></table>'
                 st.markdown(html_t, unsafe_allow_html=True)
                 st.markdown('</div>', unsafe_allow_html=True)
- 
+
             with col_i:
                 st.markdown('<div class="dh-card">', unsafe_allow_html=True)
                 st.markdown('<div class="dh-card-title">Diagrama de flujo</div>', unsafe_allow_html=True)
@@ -1221,7 +1235,7 @@ def render_main_app():
                 else:
                     st.info("Coloca 'Imagen3.png' en el directorio.")
                 st.markdown('</div>', unsafe_allow_html=True)
- 
+
             st.markdown('<div class="dh-card">', unsafe_allow_html=True)
             st.markdown('<div class="dh-card-title">Comparación de métodos</div>', unsafe_allow_html=True)
             html_comp = """<table class="res-table"><thead><tr>
@@ -1239,7 +1253,7 @@ def render_main_app():
             html_comp += "</tbody></table>"
             st.markdown(html_comp, unsafe_allow_html=True)
             st.markdown('</div>', unsafe_allow_html=True)
- 
+
             st.markdown('<hr class="dh-sep">', unsafe_allow_html=True)
             ba1, ba2, ba3 = st.columns(3, gap="medium")
             with ba1:
@@ -1262,7 +1276,7 @@ def render_main_app():
             with ba3:
                 if st.button("🖨  Imprimir página", use_container_width=True):
                     st.components.v1.html("<script>window.parent.window.print();</script>", height=0)
- 
+
     # ━━ TAB 3 — HOJA DE RESUMEN ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
     with tabs[3]:
         st.markdown('<div style="height:14px"></div>', unsafe_allow_html=True)
@@ -1274,23 +1288,23 @@ def render_main_app():
         cm_map     = {"PVC":"#bdd6ee","FG":"#f5e0c0","HDPE":"#c6e8cc"}
         cf_map     = {"PVC":"#0d2a50","FG":"#5a2d00","HDPE":"#1a3d1f"}
         n_cols     = 27
- 
+
         for fk in ["cfd","experimental","replica1","replica2","replica3"]:
             if fk not in st.session_state:
                 st.session_state[fk] = [""] * n_cols
         if "edit_mode_resumen" not in st.session_state:
             st.session_state.edit_mode_resumen = False
- 
+
         def th(text, bg="#1A4A7A", color="#FFFFFF", cs=1):
             return (f'<th colspan="{cs}" style="background:{bg};color:{color};'
                     f'padding:7px 4px;text-align:center;border:1px solid #c5d5ea;'
                     f'font-family:Rajdhani,sans-serif;font-size:10px;letter-spacing:1px;">{text}</th>')
- 
+
         def td2(text, bg="#ffffff", bold=False, align="center", color="#1a2a4a"):
             fw = "font-weight:700;" if bold else ""
             return (f'<td style="background:{bg};{fw}color:{color};'
                     f'padding:6px 4px;text-align:{align};border:1px solid #c5d5ea;font-size:9.5px;">{text}</td>')
- 
+
         html  = ('<div style="overflow-x:auto;border:1px solid #2a3550;border-radius:4px;">'
                  '<table style="border-collapse:collapse;width:100%;font-family:Exo 2,sans-serif;">')
         html += f'<tr>{th("CAUDAL (L/S)",bg="#1A4A7A",color="#FFFFFF")}'
@@ -1305,7 +1319,7 @@ def render_main_app():
             for mat in materiales:
                 for d in diams_nom: html += th(d, bg=cm_map[mat], color=cf_map[mat])
         html += '</tr>'
- 
+
         for ri, (label, key) in enumerate([
             ("VELOCIDAD POR CONTINUIDAD (m/s)", "Velocidad"),
             ("PÉRDIDA DE CARGA H-W (m)",        "Hf_HW"),
@@ -1322,7 +1336,7 @@ def render_main_app():
                             val = f"{v:.3f}" if isinstance(v, float) else str(v)
                         html += td2(val, bg=rbg, color="#1a56b0" if val else "#aabbcc")
             html += '</tr>'
- 
+
         for label, fk in [("PÉRDIDA DE CARGA OPEN FOAM (CFD)","cfd"),
                            ("PÉRDIDA EN EXPERIMENTACIÓN","experimental")]:
             html += f'<tr>{td2(label,bg="#eef4fb",bold=True,align="left",color="#1a3a6a")}'
@@ -1330,13 +1344,13 @@ def render_main_app():
                 val = st.session_state[fk][ci] if ci < len(st.session_state[fk]) else ""
                 html += td2(val if val else "—", bg="#f5f8fd", color="#3a6a8a")
             html += '</tr>'
- 
+
         html += (f'<tr><td colspan="28" style="background:#ddeaf8;color:#1a3a6a;'
                  f'padding:8px 12px;text-align:left;border:1px solid #c5d5ea;'
                  f'font-family:Rajdhani,sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;">'
                  f'Planteamiento del diseño experimental &nbsp;(solo para caso longitudinal)'
                  f'</td></tr>')
- 
+
         for label, fk in [("PRIMERA RÉPLICA","replica1"),
                            ("SEGUNDA RÉPLICA","replica2"),
                            ("TERCERA RÉPLICA","replica3")]:
@@ -1346,19 +1360,19 @@ def render_main_app():
                 html += td2(val if val else "—", bg="#ffffff", color="#3a6a8a")
             html += '</tr>'
         html += '</table></div>'
- 
+
         st.markdown('<div class="dh-card">', unsafe_allow_html=True)
         st.markdown('<div class="dh-card-title">Cuadro de resultados acumulados</div>', unsafe_allow_html=True)
         st.markdown(html, unsafe_allow_html=True)
         st.markdown('</div>', unsafe_allow_html=True)
- 
+
         if len(lista):
             st.markdown(f"""<div style="text-align:center;font-family:'Share Tech Mono',monospace;
                 color:#1a56b0;font-size:0.72rem;letter-spacing:2px;margin:6px 0">
                 {len(lista)} REPORTE(S) REGISTRADO(S)</div>""", unsafe_allow_html=True)
- 
+
         st.markdown('<hr class="dh-sep">', unsafe_allow_html=True)
- 
+
         if st.button(
             "✏️  Editar datos manuales" if not st.session_state.edit_mode_resumen else "💾  Guardar cambios",
             use_container_width=False,
@@ -1367,20 +1381,20 @@ def render_main_app():
         ):
             st.session_state.edit_mode_resumen = not st.session_state.edit_mode_resumen
             st.rerun()
- 
+
         if st.session_state.edit_mode_resumen:
             st.markdown("""<div style="background:rgba(26,86,176,0.06);border:1px solid #1a56b0;
                 border-radius:4px;padding:12px 16px;margin:10px 0;
                 font-family:'Share Tech Mono',monospace;font-size:0.7rem;color:#1a56b0;letter-spacing:1px;">
                 ⚠ MODO EDICIÓN ACTIVO — Modifica las filas manuales y presiona <b>Guardar cambios</b>.
             </div>""", unsafe_allow_html=True)
- 
+
             col_headers = []
             for q in caudales:
                 for mat in materiales:
                     for d in diams_nom:
                         col_headers.append(f"Q={q}|{mat}|{d}")
- 
+
             for fk, flabel in [("cfd","Open Foam (CFD)"), ("experimental","Experimentación")]:
                 st.markdown(f'<div class="dh-card" style="margin-top:10px">', unsafe_allow_html=True)
                 st.markdown(f'<div class="dh-card-title">Pérdida de Carga — {flabel}</div>', unsafe_allow_html=True)
@@ -1390,7 +1404,7 @@ def render_main_app():
                         nv = st.text_input(col_headers[ci], value=st.session_state[fk][ci], key=f"{fk}_{ci}")
                         st.session_state[fk][ci] = nv
                 st.markdown('</div>', unsafe_allow_html=True)
- 
+
             for rep_label, rep_key in [("PRIMERA RÉPLICA","replica1"),
                                         ("SEGUNDA RÉPLICA","replica2"),
                                         ("TERCERA RÉPLICA","replica3")]:
@@ -1402,7 +1416,7 @@ def render_main_app():
                         nv = st.text_input(col_headers[ci], value=st.session_state[rep_key][ci], key=f"{rep_key}_{ci}")
                         st.session_state[rep_key][ci] = nv
                 st.markdown('</div>', unsafe_allow_html=True)
- 
+
         st.markdown('<hr class="dh-sep">', unsafe_allow_html=True)
         datos_editados = {
             "cfd":          list(st.session_state.get("cfd",          [""] * n_cols)),
@@ -1411,7 +1425,7 @@ def render_main_app():
             "replica2":     list(st.session_state.get("replica2",     [""] * n_cols)),
             "replica3":     list(st.session_state.get("replica3",     [""] * n_cols)),
         }
- 
+
         if lista:
             eb1, eb2, eb3 = st.columns(3, gap="medium")
             with eb1:
@@ -1443,8 +1457,8 @@ def render_main_app():
                 NINGÚN REPORTE GUARDADO AÚN<br>
                 <span style="font-size:0.63rem">Ve a RESULTADOS → 💾 Guardar en Hoja de Resumen</span>
             </div>""", unsafe_allow_html=True)
- 
- 
+
+
 # ══════════════════════════════════════════════════════════════════════════════
 # 8. PUNTO DE ENTRADA PRINCIPAL
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1453,7 +1467,6 @@ def main():
         render_auth_screen()
     else:
         render_main_app()
- 
+
 if __name__ == "__main__":
     main()
- 
