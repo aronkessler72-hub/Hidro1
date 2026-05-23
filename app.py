@@ -26,6 +26,16 @@ from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
 from openpyxl.utils import get_column_letter
 
 # ══════════════════════════════════════════════════════════════════════════════
+# 2. CONFIGURACIÓN DE PÁGINA
+#    DEBE ser la primera llamada a Streamlit — antes de cualquier st.*
+# ══════════════════════════════════════════════════════════════════════════════
+st.set_page_config(
+    page_title="Diseño Hidráulico",
+    layout="wide",
+    initial_sidebar_state="collapsed",
+)
+
+# ══════════════════════════════════════════════════════════════════════════════
 # 1. CONEXIÓN A SUPABASE
 #    Crea .streamlit/secrets.toml con:
 #      SUPABASE_URL = "https://xxxx.supabase.co"
@@ -38,15 +48,6 @@ def init_supabase():
     return create_client(url, key)
 
 supabase = init_supabase()
-
-# ══════════════════════════════════════════════════════════════════════════════
-# 2. CONFIGURACIÓN DE PÁGINA
-# ══════════════════════════════════════════════════════════════════════════════
-st.set_page_config(
-    page_title="Diseño Hidráulico",
-    layout="wide",
-    initial_sidebar_state="collapsed",
-)
 
 st.markdown("""
 <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;600;700&family=Exo+2:ital,wght@0,300;0,400;0,500;1,300&family=Share+Tech+Mono&display=swap" rel="stylesheet">
